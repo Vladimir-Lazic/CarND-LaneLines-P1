@@ -1,56 +1,122 @@
 # **Finding Lane Lines on the Road** 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
-<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
-
-Overview
 ---
 
-When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
+**Finding Lane Lines on the Road**
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
-
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
-
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
+The goals / steps of this project are the following:
+* Make a pipeline that finds lane lines on the road
+* Reflect on your work in a written report
 
 
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
+### Reflection
 
-1. Describe the pipeline
+### 1. Pipleline description
 
-2. Identify any shortcomings
+The pipeline for lane detection goes as follows: 
 
-3. Suggest possible improvements
+    1. Grayscale
+    
+        First we convert the input image to grayscale
+    
+    2. Gaussian blur 
+    
+        This is done so that the grayscale image will be smoother and the later 
+        edge detection would be precise
+        
+    3. Canny edge detection 
+    
+        Canny edge detection will return a black and white image where 
+        in white are the detected edges.
+        
+        Canny parameters:         
+            low_threshold = 50
+            high_threshold = 150
+        
+        However since we need to detect lanes on the road this is incomplete.
+        
+     4. Region masking
+     
+        Region masking is done to filter out all the reduntant edges. 
+        
+        We define a trapezoid as a geometrical figure for region masking. This is because
+        based on the position of the lanes in the camera image they are located the lower
+        half of the input image and as they go up the frame they become more and more narrow. 
+        The lower corners of the trapezoid are the lower left and lower right bottom of the 
+        input image. The top corners x and y coordinates are define the following way: 
+            
+            For X we define a roi_top_center which is the middle of the trapezoid top side. 
+            The we define an offset which is either added or subtracted from the roi_top_center
+            depending on if its the top left corner or the top right corner
+            
+            For Y we divide the height with the height_scale parameter. height_scale parameter
+            was defined through trial and error by running the algorithm on an input image.
+            
+         After defining the trapezoid we apply the region masking function that only keeps the
+         parts of the input image based that are within the defined region
+         
+      5. Hough transormation
+      
+         After performing the region masking we have an image with only lane edges on in. We 
+         use the Hough transormation to get the coorinates of detected lanes. 
+         
+         Hough transformation parameters:         
+             rho = 2  
+             theta = np.pi / 180  
+             threshold = 15  
+             min_line_length = 40 
+             max_line_gap = 20 
+         
+This process is used on every image in the input video. For the visualization of the result
+we use the draw_lines function. The function takes as an input the result of the 
+Hough transformation which is an numpy.ndarray containing the coordinates of each individual line.
+The function then uses open cv line function to draw the lines on the image. Since the Hough
+transformation returns an array of cooridinates of each individual line the modification was 
+done in order the highlight the entire traffic lane. This is done using the following method:
 
-We encourage using images in your writeup to demonstrate how your pipeline works.  
+       1. Slope calculation
+       
+          We calculate the slope of each line in order to determine weather it belongs to 
+          the left lane or the right lane. The lines with the positive slope belong to
+          the right lane and the lines with the negative slope belong to the left lane
+          
+       2. Points extrapolation 
+       
+           After determining wich line belongs to which lane then we need to determine 
+           the start and end points of each traffic lane or the lowest and the highest point
+           if we think of it as position within the image. Each coordinate is packed within the 
+           array in the following way: [x1, y1, x2, y2]. For determining the lowest point for 
+           the left lane we find the maximum value of y1 since that point is the closest to the 
+           bottom of the image where the lane start is. The highest point is determined by lowest 
+           value of y2 since that coordinate is closest to the image center. Note: since we have done
+           region masking there should not be any point that has a Y value higher than the height of the
+           trapezoid. For the right lanes the extrapolation is the same except the coordinates are 
+           mirrored so we find the higest y2 and the lowest y1. 
+           
+           After defining the start and end points of each lane we use opencv.line function to 
+           draw the lines on the image
 
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
 
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
+### 2. Shortcomings
 
 
-The Project
----
+One shortcoming of the solution is in the region masking part of the code. Since 
+the values used for defining the trapezoid for region masking are determined by 
+trial and error they are specific for the input frames used. Now since not all 
+vehicles have the same cameras mounted to the front we cannot assume the same 
+height and width of the image and thus the region masking coordinates would not 
+work on an image with different frame.
 
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
+The second shortcoming could be in the extrapolation of lane points. The rather
+simple of approach of determining the highest and lowest point by their Y axis is 
+again specific for this input videos. For driving videos on different this 
+approac might not work, especially if we have mulitple right and left lines detected. 
 
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
 
-**Step 2:** Open the code in a Jupyter Notebook
+### 3. Improvements
 
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out <A HREF="https://www.packtpub.com/books/content/basics-jupyter-notebook-and-python" target="_blank">Cyrille Rossant's Basics of Jupyter Notebook and Python</A> to get started.
-
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
-
-`> jupyter notebook`
-
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
-
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+Possible improvement of the first shortcoming would be to make the region masking more modules
+and not dependent on the values that are determined though trial and error. One solution would
+be to use ratios to determine how long and wide to lanes run along the input video and determine 
+which ratios of image height and width to use to determine the top right and left corners of the 
+trapezoid. 
